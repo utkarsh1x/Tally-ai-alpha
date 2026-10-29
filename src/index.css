@@ -1,0 +1,231 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f8fafc;
+    color: #0f172a;
+    overflow-x: hidden;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    font-variant-numeric: tabular-nums;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+.dark body {
+  background-color: #090d16;
+  color: #f1f5f9;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.dark ::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Ticker marquee animation */
+@keyframes ticker {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-50%, 0, 0); }
+}
+
+.animate-ticker {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: ticker 40s linear infinite;
+}
+.animate-ticker:hover {
+  animation-play-state: paused;
+}
+
+/* ==========================================================================
+   ENTERPRISE DARK MODE SYSTEM
+   Provides seamless, high-contrast dark theme across all modules
+   ========================================================================== */
+
+.dark {
+  color-scheme: dark;
+}
+
+.dark .bg-white {
+  background-color: #0c1322 !important;
+}
+
+.dark .bg-slate-50 {
+  background-color: #111a2e !important;
+}
+
+.dark .bg-slate-100 {
+  background-color: #16223b !important;
+}
+
+.dark .border-slate-200,
+.dark .border-slate-300 {
+  border-color: #1e2d4a !important;
+}
+
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-slate-300 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e2d4a !important;
+}
+
+.dark .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+.dark .text-slate-800 {
+  color: #e2e8f0 !important;
+}
+
+.dark .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-slate-600 {
+  color: #94a3b8 !important;
+}
+
+.dark .text-blue-950 {
+  color: #ffb4ab !important;
+}
+
+.dark .text-blue-900 {
+  color: #fca5a5 !important;
+}
+
+.dark .hover\:bg-slate-50:hover {
+  background-color: #15223a !important;
+}
+
+.dark .hover\:bg-slate-100:hover {
+  background-color: #1c2c4b !important;
+}
+
+/* Form Controls in Dark Mode */
+.dark input:not([type="checkbox"]):not([type="range"]):not([type="submit"]):not([type="button"]),
+.dark select,
+.dark textarea {
+  background-color: #090e1a !important;
+  border-color: #273754 !important;
+  color: #f8fafc !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* High-contrast status badges in Dark Mode */
+.dark .bg-emerald-50,
+.dark .bg-emerald-100 {
+  background-color: rgba(6, 78, 59, 0.45) !important;
+}
+.dark .text-emerald-700,
+.dark .text-emerald-800,
+.dark .text-emerald-900 {
+  color: #6ee7b7 !important;
+}
+.dark .border-emerald-300 {
+  border-color: rgba(52, 211, 153, 0.3) !important;
+}
+
+.dark .bg-amber-50,
+.dark .bg-amber-100 {
+  background-color: rgba(120, 53, 15, 0.45) !important;
+}
+.dark .text-amber-700,
+.dark .text-amber-800,
+.dark .text-amber-900 {
+  color: #fcd34d !important;
+}
+.dark .border-amber-300 {
+  border-color: rgba(251, 191, 36, 0.3) !important;
+}
+
+.dark .bg-rose-50,
+.dark .bg-red-50,
+.dark .bg-red-100 {
+  background-color: rgba(136, 19, 55, 0.45) !important;
+}
+.dark .text-rose-800,
+.dark .text-red-800 {
+  color: #fca5a5 !important;
+}
+.dark .border-rose-300,
+.dark .border-red-300 {
+  border-color: rgba(248, 113, 113, 0.3) !important;
+}
+
+.dark .bg-blue-50,
+.dark .bg-blue-100 {
+  background-color: rgba(95, 25, 21, 0.45) !important;
+}
+.dark .text-blue-800,
+.dark .text-blue-900 {
+  color: #ffb4ab !important;
+}
+.dark .border-blue-200,
+.dark .border-blue-300 {
+  border-color: rgba(220, 80, 70, 0.3) !important;
+}
+
+/* Maintain realistic physical paper invoice look in modal */
+.dark .invoice-paper {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+.dark .invoice-paper .text-slate-900 {
+  color: #0f172a !important;
+}
+.dark .invoice-paper .text-slate-800 {
+  color: #1e293b !important;
+}
+.dark .invoice-paper .text-slate-700 {
+  color: #334155 !important;
+}
+.dark .invoice-paper .text-slate-600 {
+  color: #475569 !important;
+}
+.dark .invoice-paper .text-slate-500 {
+  color: #64748b !important;
+}
+.dark .invoice-paper .bg-slate-50,
+.dark .invoice-paper .bg-slate-100 {
+  background-color: #f8fafc !important;
+}
+.dark .invoice-paper .border-slate-200,
+.dark .invoice-paper .border-slate-300 {
+  border-color: #e2e8f0 !important;
+}
+.dark .invoice-paper thead {
+  background-color: #5F1915 !important;
+  color: #ffffff !important;
+}
+.dark .invoice-paper thead th {
+  color: #ffffff !important;
+}

@@ -1,0 +1,29 @@
+# ==============================================================================
+# Render Blueprint Specification for TallyAI Fullstack Application
+# Deploy docs: https://render.com/docs/blueprint-spec
+# ==============================================================================
+services:
+  - type: web
+    name: tally-ai-workstation
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: VITE_SUPABASE_URL
+        sync: false
+        # Enter your Supabase Project URL in the Render Dashboard (e.g., https://xyz.supabase.co)
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+        # Enter your Supabase Anon Public API Key in the Render Dashboard
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+        # Enter your Supabase Service Role Secret Key (Optional, for administrative backend access)
+      - key: FAST2SMS_API_KEY
+        sync: false
+        # Enter your Fast2SMS API Key for real telecom SMS delivery (Optional)
