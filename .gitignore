@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Local Env Files
+.env
+.env.*
+!.env.example
+
+# Local Bridge sync history
+bridge/sync-history.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -151,7 +151,147 @@ app.post('/api/users/sync', async (req, res) => {
 });
 
 // ==========================================
-// 5. Serve Built Frontend (Vite Single Page App)
+// 5. TallyPrime Local Proxy (when running locally)
+// ==========================================
+app.post('/api/tally/test', async (req, res) => {
+  const { tallyHost = 'http://localhost', tallyPort = 9000, companyName = '' } = req.body;
+  const target = `${tallyHost}:${tallyPort}/`;
+
+  const pingXml = `<?xml version="1.0" encoding="utf-8"?>
+<ENVELOPE>
+  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY>
+    <EXPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>List of Companies</REPORTNAME>
+        <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>
+      </REQUESTDESC>
+    </EXPORTDATA>
+  </BODY>
+</ENVELOPE>`;
+
+  try {
+    const tallyRes = await fetch(target, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+      body: pingXml,
+      signal: AbortSignal.timeout(5000)
+    });
+
+    const body = await tallyRes.text();
+    const companies = [];
+    const compRegex = /<COMPANY>[\s\S]*?<NAME>([\s\S]*?)<\/NAME>[\s\S]*?<\/COMPANY>/gi;
+    let m;
+    while ((m = compRegex.exec(body)) !== null) {
+      const c = m[1].replace(/<[^>]+>/g, '').trim();
+      if (c && !companies.includes(c)) companies.push(c);
+    }
+
+    res.json({
+      connected: true,
+      tallyRunning: true,
+      tallyHost,
+      tallyPort,
+      activeCompany: companies[0] || companyName || 'TallyPrime Active Company',
+      companies,
+      message: `TallyPrime XML Server is ONLINE at ${target}`
+    });
+  } catch (err) {
+    res.json({
+      connected: false,
+      tallyRunning: false,
+      tallyHost,
+      tallyPort,
+      error: `Cannot reach TallyPrime at ${target}: ${err.message}`,
+      troubleshooting: [
+        '1. Ensure TallyPrime is running on this computer.',
+        '2. Press F1 > Settings > Connectivity in TallyPrime.',
+        '3. Set Client/Server configuration to Both, and Port to 9000.',
+        '4. Open the target company in Tally.'
+      ]
+    });
+  }
+});
+
+app.post('/api/tally/push', async (req, res) => {
+  const { xml, tallyHost = 'http://localhost', tallyPort = 9000, companyName = '', batchId = `SYNC-${Date.now()}`, voucherNumbers = [] } = req.body;
+
+  if (!xml || typeof xml !== 'string') {
+    return res.status(400).json({ success: false, message: 'Missing XML payload' });
+  }
+
+  const target = `${tallyHost}:${tallyPort}/`;
+  try {
+    const tallyRes = await fetch(target, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+      body: xml,
+      signal: AbortSignal.timeout(30000)
+    });
+
+    const body = await tallyRes.text();
+
+    const extractInt = (tag) => {
+      const match = body.match(new RegExp(`<${tag}>\\s*(\\d+)\\s*<\\/${tag}>`, 'i'));
+      return match ? parseInt(match[1], 10) : 0;
+    };
+
+    const created = extractInt('CREATED');
+    const altered = extractInt('ALTERED');
+    const deleted = extractInt('DELETED');
+    const combined = extractInt('COMBINED');
+    const errors = extractInt('ERRORS');
+    const cancelled = extractInt('CANCELLED');
+
+    const errorDetails = [];
+    const lineRegex = /<LINEERROR>([\s\S]*?)<\/LINEERROR>/gi;
+    let lm;
+    while ((lm = lineRegex.exec(body)) !== null) {
+      const t = lm[1].replace(/<[^>]+>/g, '').trim();
+      if (t && !errorDetails.includes(t)) errorDetails.push(t);
+    }
+
+    const errRegex = /<ERROR>([\s\S]*?)<\/ERROR>/gi;
+    while ((lm = errRegex.exec(body)) !== null) {
+      const t = lm[1].replace(/<[^>]+>/g, '').trim();
+      if (t && !errorDetails.includes(t)) errorDetails.push(t);
+    }
+
+    const status = errors === 0 && (created > 0 || altered > 0)
+      ? 'SUCCESS'
+      : (errors > 0 && (created > 0 || altered > 0) ? 'PARTIAL' : (errors > 0 ? 'FAILED' : (created === 0 ? 'FAILED' : 'SUCCESS')));
+
+    res.json({
+      success: status === 'SUCCESS' || status === 'PARTIAL',
+      status,
+      created,
+      altered,
+      deleted,
+      combined,
+      errors,
+      cancelled,
+      errorDetails,
+      rawXml: body,
+      batchId,
+      companyName,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.json({
+      success: false,
+      status: 'FAILED',
+      created: 0,
+      altered: 0,
+      errors: 1,
+      errorDetails: [err.message],
+      message: `Failed to communicate with TallyPrime: ${err.message}`,
+      rawXml: ''
+    });
+  }
+});
+
+// ==========================================
+// 6. Serve Built Frontend (Vite Single Page App)
 // ==========================================
 const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));

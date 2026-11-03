@@ -32,27 +32,38 @@ export function generateCsv(entries: TransactionEntry[]): string {
     return `"${str}"`;
   };
 
-  const rows = entries.map((e) => [
-    e.date,
-    e.invoiceNumber,
-    e.voucherType,
-    e.ledger,
-    e.party,
-    e.partyGstin,
-    e.debit ? e.debit.toFixed(2) : '0.00',
-    e.credit ? e.credit.toFixed(2) : '0.00',
-    e.amount.toFixed(2),
-    e.gstRate,
-    e.cgst.toFixed(2),
-    e.sgst.toFixed(2),
-    e.igst.toFixed(2),
-    e.narration,
-    e.invoiceNumber,
-    e.referenceNumber,
-    `${e.confidence.overall}%`,
-    e.status,
-    e.lastModifiedBy || 'AI Ingestion'
-  ]);
+  const rows = entries.map((e) => {
+    const amount = Number(e.amount) || Number((e as any).totalAmount) || 0;
+    const debit = Number(e.debit) || Number((e as any).taxableAmount) || 0;
+    const credit = Number(e.credit) || 0;
+    const cgst = Number(e.cgst) || Number((e as any).cgstAmount) || 0;
+    const sgst = Number(e.sgst) || Number((e as any).sgstAmount) || 0;
+    const igst = Number(e.igst) || Number((e as any).igstAmount) || 0;
+    const gstRate = Number(e.gstRate) || Number((e as any).taxRate) || 0;
+    const confidence = e.confidence?.overall ?? (e as any).confidenceScore ?? 95;
+
+    return [
+      e.date || '',
+      e.invoiceNumber || '',
+      e.voucherType || 'Purchase',
+      e.ledger || (e as any).debitLedger || 'General Ledger',
+      e.party || (e as any).partyName || 'Cash / Party',
+      e.partyGstin || '',
+      debit ? debit.toFixed(2) : '0.00',
+      credit ? credit.toFixed(2) : '0.00',
+      amount.toFixed(2),
+      gstRate,
+      cgst.toFixed(2),
+      sgst.toFixed(2),
+      igst.toFixed(2),
+      e.narration || (e as any).description || 'Voucher generated via TallyAI',
+      e.invoiceNumber || '',
+      e.referenceNumber || '',
+      `${confidence}%`,
+      e.status || 'Approved',
+      (e as any).lastModifiedBy || 'AI Ingestion'
+    ];
+  });
 
   const csvLines = [
     headers.map(escapeCsv).join(','),

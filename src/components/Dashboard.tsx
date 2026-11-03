@@ -14,6 +14,7 @@ interface DashboardProps {
   transactions: TransactionEntry[];
   userRole: UserRole;
   settings: OrganizationSettings;
+  tallyConnected?: boolean;
   onNavigateTab: (tab: 'dashboard' | 'upload' | 'validation' | 'export' | 'audit' | 'settings') => void;
   onOpenVoiceModal: () => void;
 }
@@ -22,6 +23,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   transactions,
   userRole,
   settings,
+  tallyConnected = false,
   onNavigateTab,
   onOpenVoiceModal,
 }) => {
@@ -300,10 +302,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="p-3 bg-slate-50 border border-slate-200 rounded flex items-center justify-between">
               <div>
                 <span className="text-slate-500 block text-[10px] font-bold uppercase">Endpoint</span>
-                <span className="font-mono font-bold text-slate-900">{settings.tallyHost}:{settings.tallyPort}</span>
+                <span className="font-mono font-bold text-slate-900">{settings.tallyHost || 'http://localhost'}:{settings.tallyPort || 9000}</span>
               </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                ACTIVE
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                tallyConnected ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-amber-100 text-amber-800 border-amber-300'
+              }`}>
+                {tallyConnected ? 'ONLINE & READY' : 'STANDBY'}
               </span>
             </div>
 

@@ -120,10 +120,33 @@ export interface OrganizationSettings {
   currency: string;
   tallyHost: string;
   tallyPort: number;
+  tallyBridgeUrl?: string; // e.g. http://localhost:9001
+  tallyBridgeToken?: string; // secure auth token for TallyAI bridge
   tallyCompanyName: string;
   autoSyncEnabled: boolean;
   geminiApiKey?: string;
   confidenceThreshold: number; // default 85%
+}
+
+export interface TallySyncRecord {
+  id: string;
+  timestamp: string;
+  batchId: string;
+  batchSignature: string;
+  companyName: string;
+  targetEndpoint: string;
+  totalVouchers: number;
+  created: number;
+  altered: number;
+  deleted?: number;
+  combined?: number;
+  errors: number;
+  cancelled?: number;
+  status: 'SUCCESS' | 'PARTIAL' | 'FAILED';
+  errorDetails?: string[];
+  voucherNumbers: string[];
+  rawResponse?: string;
+  message?: string;
 }
 
 export interface ProcessingJob {

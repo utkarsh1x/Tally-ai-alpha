@@ -449,6 +449,37 @@ export const MasterSettings: React.FC<MasterSettingsProps> = ({
 
             <div className="md:col-span-2">
               <label className="text-slate-700 font-bold block mb-1.5">
+                TallyAI Local Bridge URL <span className="text-rose-600">*</span>
+              </label>
+              <input
+                type="text"
+                value={formSettings.tallyBridgeUrl || 'http://localhost:9001'}
+                onChange={(e) => setFormSettings({ ...formSettings, tallyBridgeUrl: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2 text-slate-900 font-mono font-bold focus:outline-none focus:bg-white focus:border-[#5F1915] transition-colors"
+              />
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                Default: <code>http://localhost:9001</code>. Runs on user workstation to securely forward requests to TallyPrime without browser CORS restrictions.
+              </span>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-slate-700 font-bold block mb-1.5">
+                TallyAI Bridge Authentication Token (Optional Override)
+              </label>
+              <input
+                type="password"
+                placeholder="Leave blank to use VITE_TALLY_BRIDGE_TOKEN or secure default"
+                value={formSettings.tallyBridgeToken || ''}
+                onChange={(e) => setFormSettings({ ...formSettings, tallyBridgeToken: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2 text-slate-900 font-mono focus:outline-none focus:bg-white focus:border-[#5F1915] transition-colors"
+              />
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                Secure bridge token validated across all <code>/api/tally/*</code> endpoints. Defaults to <code>VITE_TALLY_BRIDGE_TOKEN</code>.
+              </span>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-slate-700 font-bold block mb-1.5">
                 Target Active Company Name in Tally Prime <span className="text-rose-600">*</span>
               </label>
               <input

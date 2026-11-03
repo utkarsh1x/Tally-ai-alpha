@@ -11,6 +11,7 @@ export const initialSettings: OrganizationSettings = {
   currency: 'INR',
   tallyHost: 'http://localhost',
   tallyPort: 9000,
+  tallyBridgeUrl: 'http://localhost:9001',
   tallyCompanyName: '',
   autoSyncEnabled: false,
   confidenceThreshold: 85,

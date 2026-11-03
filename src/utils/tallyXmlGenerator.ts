@@ -25,8 +25,13 @@ export function generateTallyXml(entries: TransactionEntry[], companyName: strin
       const isPurchaseOrPayment = entry.voucherType === 'Purchase' || entry.voucherType === 'Payment';
       const isSalesOrReceipt = entry.voucherType === 'Sales' || entry.voucherType === 'Receipt';
 
-      // Calculate tax legs
-      const subtotal = entry.amount - (entry.cgst + entry.sgst + entry.igst);
+      // Defensive numerical resolution
+      const amount = Number(entry.amount) || Number((entry as any).totalAmount) || 0;
+      const cgst = Number(entry.cgst) || Number((entry as any).cgstAmount) || 0;
+      const sgst = Number(entry.sgst) || Number((entry as any).sgstAmount) || 0;
+      const igst = Number(entry.igst) || Number((entry as any).igstAmount) || 0;
+      const gstRate = Number(entry.gstRate) || Number((entry as any).taxRate) || 0;
+      const subtotal = Number(entry.debit) || Number((entry as any).taxableAmount) || (amount - (cgst + sgst + igst)) || 0;
       
       let ledgerEntries = '';
 
@@ -44,28 +49,28 @@ export function generateTallyXml(entries: TransactionEntry[], companyName: strin
             </ALLLEDGERENTRIES.LIST>`;
 
         // Debit: GST Taxes
-        if (entry.isInterState && entry.igst > 0) {
+        if (entry.isInterState && igst > 0) {
           ledgerEntries += `
             <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>Input IGST ${entry.gstRate}%</LEDGERNAME>
+              <LEDGERNAME>Input IGST ${gstRate}%</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <AMOUNT>-${entry.igst.toFixed(2)}</AMOUNT>
+              <AMOUNT>-${igst.toFixed(2)}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`;
         } else {
-          if (entry.cgst > 0) {
+          if (cgst > 0) {
             ledgerEntries += `
             <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>Input CGST ${(entry.gstRate / 2).toFixed(1)}%</LEDGERNAME>
+              <LEDGERNAME>Input CGST ${(gstRate / 2).toFixed(1)}%</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <AMOUNT>-${entry.cgst.toFixed(2)}</AMOUNT>
+              <AMOUNT>-${cgst.toFixed(2)}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`;
           }
-          if (entry.sgst > 0) {
+          if (sgst > 0) {
             ledgerEntries += `
             <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>Input SGST ${(entry.gstRate / 2).toFixed(1)}%</LEDGERNAME>
+              <LEDGERNAME>Input SGST ${(gstRate / 2).toFixed(1)}%</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <AMOUNT>-${entry.sgst.toFixed(2)}</AMOUNT>
+              <AMOUNT>-${sgst.toFixed(2)}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`;
           }
         }
@@ -76,7 +81,7 @@ export function generateTallyXml(entries: TransactionEntry[], companyName: strin
               <LEDGERNAME>${partyName}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
               <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
-              <AMOUNT>${entry.amount.toFixed(2)}</AMOUNT>
+              <AMOUNT>${amount.toFixed(2)}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`;
       } else if (isSalesOrReceipt) {
         // Sales:
@@ -86,7 +91,7 @@ export function generateTallyXml(entries: TransactionEntry[], companyName: strin
               <LEDGERNAME>${partyName}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
               <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
-              <AMOUNT>-${entry.amount.toFixed(2)}</AMOUNT>
+              <AMOUNT>-${amount.toFixed(2)}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`;
 
         // Credit: Sales Ledger
@@ -98,28 +103,28 @@ export function generateTallyXml(entries: TransactionEntry[], companyName: strin
             </ALLLEDGERENTRIES.LIST>`;
 
         // Credit: Output Taxes
-        if (entry.isInterState && entry.igst > 0) {
+        if (entry.isInterState && igst > 0) {
           ledgerEntries += `
             <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>Output IGST ${entry.gstRate}%</LEDGERNAME>
+              <LEDGERNAME>Output IGST ${gstRate}%</LEDGERNAME>
               <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-              <AMOUNT>${entry.igst.toFixed(2)}</AMOUNT>
+              <AMOUNT>${igst.toFixed(2)}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`;
         } else {
-          if (entry.cgst > 0) {
+          if (cgst > 0) {
             ledgerEntries += `
             <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>Output CGST ${(entry.gstRate / 2).toFixed(1)}%</LEDGERNAME>
+              <LEDGERNAME>Output CGST ${(gstRate / 2).toFixed(1)}%</LEDGERNAME>
               <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-              <AMOUNT>${entry.cgst.toFixed(2)}</AMOUNT>
+              <AMOUNT>${cgst.toFixed(2)}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`;
           }
-          if (entry.sgst > 0) {
+          if (sgst > 0) {
             ledgerEntries += `
             <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>Output SGST ${(entry.gstRate / 2).toFixed(1)}%</LEDGERNAME>
+              <LEDGERNAME>Output SGST ${(gstRate / 2).toFixed(1)}%</LEDGERNAME>
               <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-              <AMOUNT>${entry.sgst.toFixed(2)}</AMOUNT>
+              <AMOUNT>${sgst.toFixed(2)}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`;
           }
         }
@@ -129,12 +134,12 @@ export function generateTallyXml(entries: TransactionEntry[], companyName: strin
             <ALLLEDGERENTRIES.LIST>
               <LEDGERNAME>${expenseOrIncomeLedger}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <AMOUNT>-${entry.amount.toFixed(2)}</AMOUNT>
+              <AMOUNT>-${amount.toFixed(2)}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>
             <ALLLEDGERENTRIES.LIST>
               <LEDGERNAME>${partyName}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-              <AMOUNT>${entry.amount.toFixed(2)}</AMOUNT>
+              <AMOUNT>${amount.toFixed(2)}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`;
       }
 
@@ -155,6 +160,16 @@ export function generateTallyXml(entries: TransactionEntry[], companyName: strin
     })
     .join('\n');
 
+  const companyBlock = companyName && companyName.trim()
+    ? `      <TALLYMESSAGE xmlns:UDF="TallyUDF">
+        <COMPANY>
+          <REMOTECMPINFO.LIST>
+            <NAME>${sanitize(companyName)}</NAME>
+          </REMOTECMPINFO.LIST>
+        </COMPANY>
+      </TALLYMESSAGE>\n`
+    : '';
+
   return `<?xml version="1.0" encoding="utf-8"?>
 <ENVELOPE>
   <HEADER>
@@ -162,14 +177,7 @@ export function generateTallyXml(entries: TransactionEntry[], companyName: strin
   </HEADER>
   <BODY>
     <DATA>
-      <TALLYMESSAGE xmlns:UDF="TallyUDF">
-        <COMPANY>
-          <REMOTECMPINFO.LIST>
-            <NAME>${sanitize(companyName)}</NAME>
-          </REMOTECMPINFO.LIST>
-        </COMPANY>
-      </TALLYMESSAGE>
-${vouchersXml}
+${companyBlock}${vouchersXml}
     </DATA>
   </BODY>
 </ENVELOPE>`;

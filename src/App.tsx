@@ -11,6 +11,7 @@ import { FeedbackModal } from './components/FeedbackModal';
 import { VoiceRecorderModal } from './components/VoiceRecorderModal';
 import { LoginPage } from './components/LoginPage';
 import { syncUserWithSupabase } from './services/supabaseClient';
+import { testTallyConnectionViaBridge } from './services/tallyBridgeService';
 
 import { 
   initialSettings, 
@@ -36,7 +37,18 @@ export function App() {
   const [chartOfAccounts, setChartOfAccounts] = useState<ChartOfAccountItem[]>(initialChartOfAccounts);
   const [transactions, setTransactions] = useState<TransactionEntry[]>(initialTransactions);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(initialAuditLogs);
-  const [tallyConnected, setTallyConnected] = useState<boolean>(true);
+  const [tallyConnected, setTallyConnected] = useState<boolean>(false);
+
+  // Auto-probe TallyPrime connection on startup
+  useEffect(() => {
+    testTallyConnectionViaBridge(settings)
+      .then(res => {
+        if (res.connected && res.tallyRunning) {
+          setTallyConnected(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -304,6 +316,7 @@ export function App() {
             transactions={transactions}
             userRole={userRole}
             settings={settings}
+            tallyConnected={tallyConnected}
             onNavigateTab={setCurrentTab}
             onOpenVoiceModal={() => setShowVoiceModal(true)}
           />
