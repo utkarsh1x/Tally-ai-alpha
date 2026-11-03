@@ -23,18 +23,37 @@ const mockTallyServer = http.createServer((req, res) => {
   req.on('end', () => {
     res.setHeader('Content-Type', 'text/xml; charset=utf-8');
 
-    // 1. Tally Company Ping / List of Companies request
-    if (body.includes('List of Companies')) {
+    // 1. Tally Company Ping / List of Companies request or List of Ledgers verification
+    if (body.includes('List of Companies') || body.includes('List of Ledgers')) {
+      if (body.includes('List of Ledgers')) {
+        const ledgersXml = `<?xml version="1.0" encoding="utf-8"?>
+<ENVELOPE>
+  <HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER>
+  <BODY>
+    <DATA>
+      <COLLECTION ISMSTDEPTYPE="Yes" MSTDEPTYPE="8">
+        <LEDGER NAME="Cash"><LANGUAGENAME.LIST><NAME.LIST><NAME>Cash</NAME></NAME.LIST></LANGUAGENAME.LIST></LEDGER>
+        <LEDGER NAME="Bank Current A/c"><LANGUAGENAME.LIST><NAME.LIST><NAME>Bank Current A/c</NAME></NAME.LIST></LANGUAGENAME.LIST></LEDGER>
+      </COLLECTION>
+    </DATA>
+  </BODY>
+</ENVELOPE>`;
+        res.writeHead(200);
+        res.end(ledgersXml);
+        return;
+      }
+
       const companiesXml = `<?xml version="1.0" encoding="utf-8"?>
 <ENVELOPE>
   <HEADER>
-    <TALLYREQUEST>Export Data</TALLYREQUEST>
+    <VERSION>1</VERSION>
+    <STATUS>1</STATUS>
   </HEADER>
   <BODY>
     <DATA>
       <COLLECTION>
-        <COMPANY>
-          <NAME>Apex Industrial Solutions Pvt Ltd</NAME>
+        <COMPANY NAME="Apex Industrial Solutions Pvt Ltd">
+          <NAME TYPE="String">Apex Industrial Solutions Pvt Ltd</NAME>
         </COMPANY>
       </COLLECTION>
     </DATA>

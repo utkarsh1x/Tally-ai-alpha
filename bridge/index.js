@@ -335,15 +335,47 @@ function sendXmlToTally(targetUrl, xmlPayload, timeoutMs = 20000) {
 }
 
 /**
- * Pings TallyPrime to test connectivity and detect open company.
+ * Tests TallyPrime connectivity and verifies whether the requested company is accessible.
+ * 
+ * Protocol Requirements:
+ * - Uses TallyPrime's documented XML Export Collection request:
+ *     <TALLYREQUEST>Export</TALLYREQUEST>
+ *     <TYPE>COLLECTION</TYPE>
+ *     <ID>List of Ledgers</ID>
+ *     <SVCURRENTCOMPANY>exact configured company name</SVCURRENTCOMPANY>
+ * - Also queries active companies (<ID>List of Companies</ID>) to establish loaded companies.
+ * - Parses and inspects:
+ *     - HTTP status
+ *     - XML validity
+ *     - Tally STATUS tag (e.g. <STATUS>1</STATUS> vs <STATUS>0</STATUS>)
+ *     - <LINEERROR>, <ERROR>, <ERRORMSG>
+ *     - Collection payload (<LEDGER> items in the requested company)
+ * - Returns accurate, distinct boolean indicators:
+ *     - bridgeOnline: boolean
+ *     - tallyReachable: boolean
+ *     - connected: boolean (only true when Tally is reachable and company is verified)
+ *     - companyVerified: boolean
+ *     - requestedCompany: string
+ *     - activeCompany: string (only if genuinely verified from Tally response)
+ *     - loadedCompanies: string[]
+ * - NEVER uses requested company as a fallback active company.
+ * - NEVER reports connected: true solely because Tally returned HTTP 200.
  */
 async function testTallyConnection(tallyHost, tallyPort, targetCompany = '') {
   let target;
+  const requestedCompany = String(targetCompany || '').trim();
+
   try {
     target = resolveAndLockTallyTarget(tallyHost, tallyPort);
   } catch (err) {
     return {
+      bridgeOnline: true,
+      tallyReachable: false,
       connected: false,
+      companyVerified: false,
+      requestedCompany,
+      activeCompany: '',
+      loadedCompanies: [],
       tallyRunning: false,
       tallyUrl: `${tallyHost}:${tallyPort}`,
       error: err.message,
@@ -354,77 +386,39 @@ async function testTallyConnection(tallyHost, tallyPort, targetCompany = '') {
 
   const tallyUrl = `${target.url}/`;
 
-  const pingXml = `<?xml version="1.0" encoding="utf-8"?>
+  // Step 1: Query currently loaded active companies from TallyPrime
+  const companiesQueryXml = `<?xml version="1.0" encoding="utf-8"?>
 <ENVELOPE>
   <HEADER>
-    <TALLYREQUEST>Export Data</TALLYREQUEST>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>COLLECTION</TYPE>
+    <ID>List of Companies</ID>
   </HEADER>
   <BODY>
-    <EXPORTDATA>
-      <REQUESTDESC>
-        <REPORTNAME>List of Companies</REPORTNAME>
-        <STATICVARIABLES>
-          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-        </STATICVARIABLES>
-      </REQUESTDESC>
-    </EXPORTDATA>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+      </STATICVARIABLES>
+    </DESC>
   </BODY>
 </ENVELOPE>`;
 
+  let compRawRes;
   try {
-    const response = await sendXmlToTally(tallyUrl, pingXml, 6000);
-    const body = response.data || '';
-
-    // Extract company names from response
-    const companies = [];
-    const companyRegex = /<COMPANY>[\s\S]*?<NAME>([\s\S]*?)<\/NAME>[\s\S]*?<\/COMPANY>/gi;
-    let match;
-    while ((match = companyRegex.exec(body)) !== null) {
-      const cName = match[1].replace(/<[^>]+>/g, '').trim();
-      if (cName && !companies.includes(cName)) {
-        companies.push(cName);
-      }
-    }
-
-    // Fallback: check simple <NAME> tags if no <COMPANY> hierarchy
-    if (companies.length === 0) {
-      const nameRegex = /<NAME>([\s\S]*?)<\/NAME>/gi;
-      while ((match = nameRegex.exec(body)) !== null) {
-        const cName = match[1].replace(/<[^>]+>/g, '').trim();
-        if (cName && !companies.includes(cName) && !cName.startsWith('$$')) {
-          companies.push(cName);
-        }
-      }
-    }
-
-    const activeCompany = companies[0] || targetCompany || 'TallyPrime Active Company';
-
-    return {
-      connected: true,
-      tallyRunning: true,
-      tallyUrl: target.url,
-      tallyHost: target.hostname,
-      tallyPort: target.port,
-      activeCompany,
-      companies,
-      httpStatus: response.statusCode,
-      message: `TallyPrime XML Server v4.1 is ONLINE at ${target.url}. Found ${companies.length} active company/companies.`
-    };
+    compRawRes = await sendXmlToTally(tallyUrl, companiesQueryXml, 6000);
   } catch (err) {
     const isConnRefused = err.code === 'ECONNREFUSED' || err.message.includes('ECONNREFUSED');
     const isTimeout = err.message.includes('timed out');
 
-    let troubleshooting = [
-      '1. Open TallyPrime on this computer.',
-      '2. In TallyPrime, press F1 (Help) > Settings > Connectivity.',
-      '3. Set "Client/Server configuration" to "Both".',
-      `4. Verify Port is set to ${target.port}.`,
-      '5. Restart TallyPrime if you just changed connectivity settings.',
-      '6. Ensure the company is open in TallyPrime.'
-    ];
-
     return {
+      bridgeOnline: true,
+      tallyReachable: false,
       connected: false,
+      companyVerified: false,
+      requestedCompany,
+      activeCompany: '',
+      loadedCompanies: [],
       tallyRunning: false,
       tallyUrl: target.url,
       tallyHost: target.hostname,
@@ -435,9 +429,228 @@ async function testTallyConnection(tallyHost, tallyPort, targetCompany = '') {
         ? `Connection to TallyPrime at ${target.url} timed out.`
         : `TallyPrime connection error: ${err.message}`,
       code: err.code || 'UNKNOWN',
-      troubleshooting
+      troubleshooting: [
+        '1. Open TallyPrime on this computer.',
+        '2. In TallyPrime, press F1 (Help) > Settings > Connectivity.',
+        '3. Set "Client/Server configuration" to "Both".',
+        `4. Verify Port is set to ${target.port}.`,
+        '5. Restart TallyPrime if you just changed connectivity settings.',
+        '6. Ensure the company is open in TallyPrime.'
+      ]
     };
   }
+
+  // Tally responded! Check HTTP status and XML body
+  const compBody = String(compRawRes.data || '').trim();
+  if (!compBody) {
+    return {
+      bridgeOnline: true,
+      tallyReachable: true,
+      connected: false,
+      companyVerified: false,
+      requestedCompany,
+      activeCompany: '',
+      loadedCompanies: [],
+      tallyRunning: true,
+      tallyUrl: target.url,
+      httpStatus: compRawRes.statusCode,
+      error: 'TallyPrime returned an empty response.',
+      message: 'TallyPrime reachable, company not verified.'
+    };
+  }
+
+  // Extract any errors from the companies response
+  const compErrors = [];
+  const lineErrRegex = /<(?:LINEERROR|ERROR|ERRORMSG)>([\s\S]*?)<\/(?:LINEERROR|ERROR|ERRORMSG)>/gi;
+  let m;
+  while ((m = lineErrRegex.exec(compBody)) !== null) {
+    const cleanErr = m[1].replace(/<[^>]+>/g, '').trim();
+    if (cleanErr && !compErrors.includes(cleanErr)) {
+      compErrors.push(cleanErr);
+    }
+  }
+
+  // Extract company names
+  const loadedCompanies = [];
+  const companyBlockRegex = /<COMPANY[^>]*>([\s\S]*?)<\/COMPANY>/gi;
+  let cMatch;
+  while ((cMatch = companyBlockRegex.exec(compBody)) !== null) {
+    const block = cMatch[1];
+    const nameMatch = block.match(/<NAME[^>]*>([\s\S]*?)<\/NAME>/i);
+    if (nameMatch) {
+      const name = nameMatch[1].replace(/<[^>]+>/g, '').trim();
+      if (name && !loadedCompanies.includes(name) && !name.startsWith('$$')) {
+        loadedCompanies.push(name);
+      }
+    }
+  }
+
+  // Fallback: check COMPANY NAME attribute if present
+  const compAttrRegex = /<COMPANY\s+[^>]*NAME="([^"]+)"/gi;
+  while ((cMatch = compAttrRegex.exec(compBody)) !== null) {
+    const attrName = cMatch[1].trim();
+    if (attrName && !loadedCompanies.includes(attrName) && !attrName.startsWith('$$')) {
+      loadedCompanies.push(attrName);
+    }
+  }
+
+  // Check if Tally has STATUS 0
+  const statusMatch = compBody.match(/<STATUS>\s*(\d+)\s*<\/STATUS>/i);
+  const statusVal = statusMatch ? parseInt(statusMatch[1], 10) : null;
+  if (statusVal === 0 || compErrors.length > 0) {
+    return {
+      bridgeOnline: true,
+      tallyReachable: true,
+      connected: false,
+      companyVerified: false,
+      requestedCompany,
+      activeCompany: '',
+      loadedCompanies,
+      tallyRunning: true,
+      tallyUrl: target.url,
+      httpStatus: compRawRes.statusCode,
+      error: compErrors[0] || 'TallyPrime returned STATUS 0 error during inspection.',
+      message: 'TallyPrime reachable, company not verified.'
+    };
+  }
+
+  // Step 2: Validate the requested company against TallyPrime
+  // Note: loadedCompanies, requestedCompany, verifiedCompany, and activeCompany must NEVER be treated as interchangeable.
+  // - loadedCompanies: all company books currently loaded in TallyPrime session.
+  // - requestedCompany: the company target configured in TallyAI settings.
+  // - verifiedCompany: the company confirmed to exist in loadedCompanies AND accessible.
+  // - activeCompany: the company actively selected in TallyPrime session.
+  let companyVerified = false;
+  let verifiedCompany = '';
+  let activeCompany = '';
+  let ledgersCount = 0;
+  let verificationError = '';
+
+  if (requestedCompany) {
+    // Check if the requested company is in loadedCompanies (exact or case-insensitive)
+    const matchedLoadedCompany = loadedCompanies.find(c => c.toLowerCase() === requestedCompany.toLowerCase());
+
+    const ledgerVerifyXml = `<?xml version="1.0" encoding="utf-8"?>
+<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>COLLECTION</TYPE>
+    <ID>List of Ledgers</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVCURRENTCOMPANY>${(matchedLoadedCompany || requestedCompany).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</SVCURRENTCOMPANY>
+      </STATICVARIABLES>
+      <FETCHLIST>
+        <FETCH>NAME</FETCH>
+      </FETCHLIST>
+    </DESC>
+  </BODY>
+</ENVELOPE>`;
+
+    try {
+      const ledgerRes = await sendXmlToTally(tallyUrl, ledgerVerifyXml, 6000);
+      const ledgerBody = String(ledgerRes.data || '').trim();
+
+      // Check errors in ledger response
+      const ledgerErrors = [];
+      while ((m = lineErrRegex.exec(ledgerBody)) !== null) {
+        const cleanErr = m[1].replace(/<[^>]+>/g, '').trim();
+        if (cleanErr && !ledgerErrors.includes(cleanErr)) {
+          ledgerErrors.push(cleanErr);
+        }
+      }
+
+      const ledgerStatusMatch = ledgerBody.match(/<STATUS>\s*(\d+)\s*<\/STATUS>/i);
+      const ledgerStatus = ledgerStatusMatch ? parseInt(ledgerStatusMatch[1], 10) : 1;
+
+      // Count ledgers returned
+      const ledgerMatches = ledgerBody.match(/<LEDGER\s+[^>]*NAME=/gi);
+      ledgersCount = ledgerMatches ? ledgerMatches.length : 0;
+
+      // Genuine verification requires:
+      // 1. Tally returned STATUS 1 (not 0)
+      // 2. No LINEERROR/ERRORMSG
+      // 3. The requested company is in loadedCompanies
+      // 4. Tally successfully returned ledger collection for this company (ledgersCount > 0)
+      if (ledgerStatus !== 0 && ledgerErrors.length === 0 && matchedLoadedCompany && ledgersCount > 0) {
+        companyVerified = true;
+        verifiedCompany = matchedLoadedCompany;
+        // activeCompany is only established when this verified company is confirmed active
+        activeCompany = matchedLoadedCompany;
+      } else {
+        companyVerified = false;
+        verifiedCompany = '';
+        activeCompany = '';
+        
+        if (ledgerErrors.length > 0) {
+          verificationError = ledgerErrors[0];
+        } else if (!matchedLoadedCompany) {
+          verificationError = loadedCompanies.length > 0
+            ? `Requested company '${requestedCompany}' does not match loaded companies in TallyPrime: [${loadedCompanies.join(', ')}].`
+            : `Requested company '${requestedCompany}' is not open in TallyPrime.`;
+        } else if (ledgersCount === 0) {
+          verificationError = `Company '${matchedLoadedCompany}' returned 0 ledgers from TallyPrime. Company may not be selected or active.`;
+        } else {
+          verificationError = `Company '${requestedCompany}' could not be verified in TallyPrime.`;
+        }
+      }
+    } catch (verErr) {
+      companyVerified = false;
+      verifiedCompany = '';
+      activeCompany = '';
+      verificationError = `Failed verifying company '${requestedCompany}': ${verErr.message}`;
+    }
+  } else {
+    // When no company was requested:
+    // Never assume the first loaded company is active if multiple companies are loaded!
+    companyVerified = false;
+    verifiedCompany = '';
+    activeCompany = '';
+    if (loadedCompanies.length > 0) {
+      verificationError = `No target company configured in TallyAI settings. Loaded companies in Tally: [${loadedCompanies.join(', ')}].`;
+    } else {
+      verificationError = 'No companies are currently open in TallyPrime.';
+    }
+  }
+
+  const isConnected = companyVerified;
+  const statusMessage = isConnected
+    ? `TallyPrime connection verified. Active company: '${activeCompany}' (${ledgersCount} ledgers indexed).`
+    : (loadedCompanies.length > 0
+      ? `TallyPrime reachable, company not verified. Loaded companies in Tally: [${loadedCompanies.join(', ')}].`
+      : 'TallyPrime reachable, company not verified.');
+
+  return {
+    bridgeOnline: true,
+    tallyReachable: true,
+    connected: isConnected,
+    companyVerified,
+    requestedCompany,
+    verifiedCompany,
+    activeCompany,
+    loadedCompanies,
+    ledgersCount,
+    tallyRunning: true,
+    tallyUrl: target.url,
+    tallyHost: target.hostname,
+    tallyPort: target.port,
+    httpStatus: compRawRes.statusCode,
+    error: isConnected ? undefined : (verificationError || (compErrors[0] || undefined)),
+    message: statusMessage
+  };
+}
+    tallyRunning: true,
+    tallyUrl: target.url,
+    tallyHost: target.hostname,
+    tallyPort: target.port,
+    httpStatus: compRawRes.statusCode,
+    error: isConnected ? undefined : (verificationError || (compErrors[0] || undefined)),
+    message: statusMessage
+  };
 }
 
 /**

@@ -164,30 +164,42 @@ export const TallyExportSync: React.FC<TallyExportSyncProps> = ({
 
       if (result.bridgeOnline) {
         setBridgeOnline(true);
-        if (result.connected && result.tallyRunning) {
+        if (result.connected && result.companyVerified && result.activeCompany) {
           setTallyConnected(true);
-          if (result.activeCompany) {
-            setDetectedCompany(result.activeCompany);
-          }
+          setDetectedCompany(result.activeCompany);
           setSyncLogs(prev => [
             ...prev,
-            `[${timeStr}] [BRIDGE ONLINE] Local TallyAI Bridge is active on port 9001.`,
-            `[${timeStr}] [TALLY ONLINE] ${result.message}`,
-            `[${timeStr}] [ACTIVE COMPANY] '${result.activeCompany || 'Default Company'}'`,
-            `[${timeStr}] [READY] Socket ready for one-click XML voucher push!`,
+            `[${timeStr}] [BRIDGE ONLINE] Local TallyAI Bridge active on port 9001.`,
+            `[${timeStr}] [COMPANY VERIFIED] '${result.activeCompany}' verified via TallyPrime collection.`,
+            `[${timeStr}] [READY] Gateway ready for real one-click XML voucher push!`,
+          ]);
+        } else if (result.tallyReachable) {
+          setTallyConnected(false);
+          setDetectedCompany('');
+          const openCmpMsg = result.loadedCompanies && result.loadedCompanies.length > 0 
+            ? `Active companies open in Tally: [${result.loadedCompanies.join(', ')}]`
+            : 'No active company verified in Tally.';
+          setSyncLogs(prev => [
+            ...prev,
+            `[${timeStr}] [BRIDGE ONLINE] Local TallyAI Bridge active on port 9001.`,
+            `[${timeStr}] [TALLY REACHABLE] TallyPrime is reachable on port ${settings.tallyPort || 9000}, but company '${settings.tallyCompanyName || 'Apex Industrial Solutions Pvt Ltd'}' is NOT verified!`,
+            `[${timeStr}] [TALLY NOTICE] ${openCmpMsg}`,
+            ...(result.error ? [`[${timeStr}] [DIAGNOSTIC] ${result.error}`] : []),
           ]);
         } else {
           setTallyConnected(false);
+          setDetectedCompany('');
           setSyncLogs(prev => [
             ...prev,
-            `[${timeStr}] [BRIDGE ONLINE] Local TallyAI Bridge is active on port 9001.`,
-            `[${timeStr}] [TALLY OFFLINE] ${result.error}`,
+            `[${timeStr}] [BRIDGE ONLINE] Local TallyAI Bridge active on port 9001.`,
+            `[${timeStr}] [TALLY OFFLINE] ${result.error || 'Cannot reach TallyPrime.'}`,
             ...(result.troubleshooting ? result.troubleshooting.map(t => `[${timeStr}] [DIAGNOSTIC] ${t}`) : []),
           ]);
         }
       } else {
         setBridgeOnline(false);
         setTallyConnected(false);
+        setDetectedCompany('');
         setSyncLogs(prev => [
           ...prev,
           `[${timeStr}] [BRIDGE OFFLINE] ${result.error}`,
@@ -198,6 +210,7 @@ export const TallyExportSync: React.FC<TallyExportSyncProps> = ({
       const timeStr = new Date().toLocaleTimeString();
       setBridgeOnline(false);
       setTallyConnected(false);
+      setDetectedCompany('');
       setSyncLogs(prev => [
         ...prev,
         `[${timeStr}] [ERROR] Gateway communication failure: ${err.message}`,
@@ -570,7 +583,7 @@ export const TallyExportSync: React.FC<TallyExportSyncProps> = ({
                 </span>
               </div>
               <span className="font-bold text-[#5F1915] text-[11px] block truncate mt-0.5">
-                {detectedCompany || settings.tallyCompanyName || 'Company: Active Tally Session'}
+                {detectedCompany ? `Verified: ${detectedCompany}` : (settings.tallyCompanyName ? `Target: ${settings.tallyCompanyName} (Unverified)` : 'No Company Configured')}
               </span>
             </div>
 

@@ -69,10 +69,7 @@ async function fetchWithBridgeFallback(
   const candidateUrls = [
     `${primary}${path}`,
     primary.includes('localhost') ? `${primary.replace('localhost', '127.0.0.1')}${path}` : null,
-    // If running on local server, fallback to relative proxy path
-    typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? `${path}` 
-      : null
+    primary.includes('127.0.0.1') ? `${primary.replace('127.0.0.1', 'localhost')}${path}` : null
   ].filter(Boolean) as string[];
 
   let lastError: any = null;
@@ -95,9 +92,14 @@ async function fetchWithBridgeFallback(
 export interface TallyTestResult {
   connected: boolean;
   bridgeOnline: boolean;
-  tallyRunning: boolean;
+  tallyReachable: boolean;
+  companyVerified: boolean;
+  requestedCompany: string;
+  verifiedCompany?: string;
   activeCompany?: string;
-  companies?: string[];
+  loadedCompanies?: string[];
+  ledgersCount?: number;
+  tallyRunning: boolean; // backwards-compatible alias for tallyReachable
   error?: string;
   troubleshooting?: string[];
   message: string;
@@ -107,10 +109,11 @@ export interface TallyTestResult {
  * Tests connection to TallyPrime via the local bridge.
  */
 export async function testTallyConnectionViaBridge(settings: OrganizationSettings): Promise<TallyTestResult> {
+  const requestedCompany = settings.tallyCompanyName || '';
   const payload = {
     tallyHost: settings.tallyHost || 'http://localhost',
     tallyPort: settings.tallyPort || 9000,
-    companyName: settings.tallyCompanyName || ''
+    companyName: requestedCompany
   };
 
   try {
@@ -126,6 +129,10 @@ export async function testTallyConnectionViaBridge(settings: OrganizationSetting
       return {
         connected: false,
         bridgeOnline: true,
+        tallyReachable: false,
+        companyVerified: false,
+        requestedCompany,
+        activeCompany: '',
         tallyRunning: false,
         error: data.error || 'Unauthorized: Invalid or missing bridge authentication token.',
         troubleshooting: [
@@ -137,35 +144,40 @@ export async function testTallyConnectionViaBridge(settings: OrganizationSetting
       };
     }
 
-    if (data.connected && data.tallyRunning) {
-      return {
-        connected: true,
-        bridgeOnline: true,
-        tallyRunning: true,
-        activeCompany: data.activeCompany || settings.tallyCompanyName || 'Active Company',
-        companies: data.companies || [],
-        message: data.message || `Connected to TallyPrime on port ${settings.tallyPort || 9000}.`
-      };
-    } else {
-      return {
-        connected: false,
-        bridgeOnline: true,
-        tallyRunning: false,
-        error: data.error || `TallyPrime is not responding on port ${settings.tallyPort || 9000}.`,
-        troubleshooting: data.troubleshooting || [
-          '1. Ensure TallyPrime is running on your machine.',
-          '2. In TallyPrime, press F1 (Help) > Settings > Connectivity.',
-          '3. Set "Client/Server configuration" to "Both" and Port to 9000.',
-          '4. Open the target company in Tally.'
-        ],
-        message: data.error || 'TallyPrime is offline.'
-      };
-    }
+    const bridgeOnline = Boolean(data.bridgeOnline !== false);
+    const tallyReachable = Boolean(data.tallyReachable || data.tallyRunning);
+    const companyVerified = Boolean(data.companyVerified);
+    const connected = Boolean(data.connected);
+    const activeCompany = (data.activeCompany && typeof data.activeCompany === 'string') ? data.activeCompany.trim() : '';
+    const loadedCompanies = Array.isArray(data.loadedCompanies) ? data.loadedCompanies : (Array.isArray(data.companies) ? data.companies : []);
+
+    return {
+      connected,
+      bridgeOnline,
+      tallyReachable,
+      companyVerified,
+      requestedCompany: data.requestedCompany || requestedCompany,
+      verifiedCompany: data.verifiedCompany || '',
+      activeCompany,
+      loadedCompanies,
+      ledgersCount: data.ledgersCount,
+      tallyRunning: tallyReachable,
+      error: data.error,
+      troubleshooting: data.troubleshooting,
+      message: data.message || (connected 
+        ? `Connected to TallyPrime. Active Company: '${activeCompany}'` 
+        : (tallyReachable ? 'TallyPrime reachable, company not verified.' : 'TallyPrime is offline.'))
+    };
   } catch (err: any) {
     const primaryUrl = getBridgeBaseUrl(settings);
     return {
       connected: false,
       bridgeOnline: false,
+      tallyReachable: false,
+      companyVerified: false,
+      requestedCompany,
+      activeCompany: '',
+      loadedCompanies: [],
       tallyRunning: false,
       error: `Could not reach TallyAI Bridge at ${primaryUrl}.`,
       troubleshooting: [

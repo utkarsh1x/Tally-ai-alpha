@@ -170,15 +170,26 @@ export function generateTallyXml(entries: TransactionEntry[], companyName: strin
       </TALLYMESSAGE>\n`
     : '';
 
+  const staticVariables = companyName && companyName.trim()
+    ? `      <STATICVARIABLES>
+        <SVCURRENTCOMPANY>${sanitize(companyName)}</SVCURRENTCOMPANY>
+      </STATICVARIABLES>\n`
+    : '';
+
   return `<?xml version="1.0" encoding="utf-8"?>
 <ENVELOPE>
   <HEADER>
     <TALLYREQUEST>Import Data</TALLYREQUEST>
   </HEADER>
   <BODY>
-    <DATA>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Vouchers</REPORTNAME>
+${staticVariables}      </REQUESTDESC>
+      <REQUESTDATA>
 ${companyBlock}${vouchersXml}
-    </DATA>
+      </REQUESTDATA>
+    </IMPORTDATA>
   </BODY>
 </ENVELOPE>`;
 }
